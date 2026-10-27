@@ -32,10 +32,11 @@ namespace WebApi.Controllers
         {
         }
 
-        // DELETE api/<PistakController>/5
+        // SOFT DELETE api/<PistakController>/5
         [HttpDelete("{id}")]
-        public void Delete(int id)
+        public void DeleteSoft(int id)
         {
+            
         }
     }
 }
