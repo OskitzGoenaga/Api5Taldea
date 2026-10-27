@@ -1,6 +1,10 @@
+using MySql.Data.MySqlClient;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+string connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
+builder.Services.AddTransient(_ => new MySqlConnection(connectionString));
 
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi

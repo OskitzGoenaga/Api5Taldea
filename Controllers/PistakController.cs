@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using MySql.Data.MySqlClient;
 
 namespace WebApi.Controllers
 {
@@ -6,6 +7,13 @@ namespace WebApi.Controllers
     [ApiController]
     public class PistakController : ControllerBase
     {
+        private readonly string _connectionString;
+
+        public PistakController(string connectionString)
+        {
+            _connectionString = connectionString;
+        }
+
         // GET: api/<PistakController>
         [HttpGet]
         public IEnumerable<string> Get()
@@ -13,30 +21,51 @@ namespace WebApi.Controllers
             return new string[] { "value1", "value2" };
         }
 
-        // GET api/<PistakController>/5
-        [HttpGet("{id}")]
-        public string Get(int id)
-        {
-            return "value";
-        }
-
-        // POST api/<PistakController>
-        [HttpPost]
-        public void Post([FromBody] string value)
-        {
-        }
-
-        // PUT api/<PistakController>/5
-        [HttpPut("{id}")]
-        public void Put(int id, [FromBody] string value)
-        {
-        }
-
-        // SOFT DELETE api/<PistakController>/5
+        // DELETE api/<PistakController>/5
         [HttpDelete("{id}")]
-        public void DeleteSoft(int id)
+        public void Delete(int id)
         {
-            
+        }
+
+        [HttpDelete("/hardDelete/{id}")]
+        public bool DeleteHard(int id)
+        {
+            try
+            {
+                using var con = new MySqlConnection(_connectionString);
+                con.Open();
+
+                string checkSql = "SELECT COUNT(1) FROM pista WHERE id = @id and ezabatuta = true";
+                using var checkCmd = new MySqlCommand(checkSql, con);
+                checkCmd.Parameters.AddWithValue("@Id", id);
+                
+                long count = Convert.ToInt64(checkCmd.ExecuteScalar());
+
+                if (count == 0)
+                {
+                    Console.WriteLine($"Ez da aurkitu erreserbarik");
+                    return false;
+                }
+
+                string deleteSql = "DELETE FROM pistak WHERE id = @Id";
+                using var deleteCmd = new MySqlCommand(deleteSql, con);
+                deleteCmd.Parameters.AddWithValue("@Id", id);
+
+                int rowsAffected = deleteCmd.ExecuteNonQuery();
+
+                if (rowsAffected > 0)
+                {
+                    Console.WriteLine($"\nPista ondo ezabatu da");
+                    return true;
+                }
+
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"\nErrorea erreserba ezabatzean: {ex.Message}");
+                return false;
+            }
         }
     }
 }
