@@ -13,10 +13,11 @@ namespace WebApi.Controllers
             return new string[] { "value1", "value2" };
         }
 
-        // DELETE api/<PistakController>/5
-        [HttpDelete("{id}")]
-        public void Delete(int id)
+        // GET api/<PistakController>/5
+        [HttpGet("{id}")]
+        public string Get(int id)
         {
+            return "value";
         }
 
         // POST api/<PistakController>
@@ -134,7 +135,7 @@ namespace WebApi.Controllers
 
 }
 
-            }
+}
         }
     }
 }
