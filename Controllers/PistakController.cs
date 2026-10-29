@@ -1,165 +1,173 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using MySql.Data.MySqlClient;
+using System.Data;
+using WebApi.Models;
 
 namespace WebApi.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class PistakController : ControllerBase
+    public class PistakController : BaseApiController
     {
-        // GET: api/<PistakController>
-        [HttpGet]
-        public IEnumerable<string> Get()
+        private readonly string _connectionString;
+
+        public PistakController(string connectionString)
         {
-            return new string[] { "value1", "value2" };
+            _connectionString = connectionString;
         }
 
-        // DELETE api/<PistakController>/5
-        [HttpDelete("/softDelete/{id}")]
-        public bool DeleteSoft(int id)
+        [HttpGet]
+        public async Task<IActionResult> GetPistak()
         {
             try
             {
                 using var con = new MySqlConnection(_connectionString);
-                con.Open();
+                await con.OpenAsync();
 
-                string checkSql = "SELECT COUNT(1) FROM pista WHERE id = @Id";
-                using var checkCmd = new MySqlCommand(checkSql, con);
-                checkCmd.Parameters.AddWithValue("@Id", id);
+                string sql = "SELECT id, izena, kirola FROM pista WHERE ezabatuta = 0";
+                using var cmd = new MySqlCommand(sql, con);
+                using var reader = await cmd.ExecuteReaderAsync();
 
-                long count = Convert.ToInt64(checkCmd.ExecuteScalar());
-
-                if (count == 0)
+                var pistas = new List<PistakModel>();
+                while (await reader.ReadAsync())
                 {
-                    Console.WriteLine($"Ez da aurkitu erreserbarik");
-                    return false;
+                    pistas.Add(new PistakModel
+                    {
+                        Id = reader.GetInt32("id"),
+                        Izena = reader.GetString("izena"),
+                        Kirola = reader.GetString("kirola")
+                    });
                 }
 
-                string deleteSql = "UPDATE pista SET ezabatuta = true WHERE id = @Id";
-                using var deleteCmd = new MySqlCommand(deleteSql, con);
-                deleteCmd.Parameters.AddWithValue("@Id", id);
-
-                int rowsAffected = deleteCmd.ExecuteNonQuery();
-
-                if (rowsAffected > 0)
-                {
-                    Console.WriteLine($"\nPistaren egoera aldatu da");
-                    return true;
-                }
-
-                return false;
+                return SuccessList(pistas, 200, "Pista aktiboak kargatu dira.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"\nErrorea erreserba aldatzean: {ex.Message}");
-                return false;
+                return Error(500, "INTERNAL_SERVER_ERROR", "Errorea pista aktiboak lortzean", ex.Message);
             }
         }
 
-        // PUT api/<PistakController>/5
-        [HttpPut("{id}")]
-        public void Put(int id, [FromBody] string value)
-        {
-        }
-
-        // SOFT DELETE api/<PistakController>/5
-        [HttpDelete("{id}")]
-        public void SoftDelete(int id)
+        [HttpGet("ezabatuak")]
+        public async Task<IActionResult> GetPistaEzabatuak()
         {
             try
             {
+                using var con = new MySqlConnection(_connectionString);
+                await con.OpenAsync();
 
-                using var con = new MySqlConnection(ConnectionStrings);
+                string sql = "SELECT id, izena, kirola FROM pista WHERE ezabatuta = 1";
+                using var cmd = new MySqlCommand(sql, con);
+                using var reader = await cmd.ExecuteReaderAsync();
 
-                con.Open();
-
-
-                using var transaction = con.BeginTransaction();
-
-
-                string selectSql = "SELECT id FROM pista WHERE id = @PistaId FOR UPDATE";
-
-                using var selectCmd = new MySqlCommand(selectSql, con, transaction);
-
-                selectCmd.Parameters.AddWithValue("@PistaId", pistaId);
-
-                using var reader = selectCmd.ExecuteReader();
-
-
-                if (reader.HasRows)
-
+                var pistak = new List<PistakModel>();
+                while (await reader.ReadAsync())
                 {
-
-                    Console.WriteLine("\nPista hori jada erreserbatuta dago ordu eta data horretan");
-
-                    reader.Close();
-
-                    transaction.Rollback();
-
-                    return;
-
+                    pistak.Add(new PistakModel
+                    {
+                        Id = reader.GetInt32("id"),
+                        Izena = reader.GetString("izena"),
+                        Kirola = reader.GetString("kirola")
+                    });
                 }
 
-
-                reader.Close();
-
-
-                Console.WriteLine("Sakatu ENTER erreserba egiteko: ");
-
-                Console.ReadLine();
-
-
-                string insertSql = " erreserba (pista_id, bazkidea_id, data, ordua) VALUES (@PistaId, @BazkideId, @Data, @Ordua)";
-
-                using var insertCmd = new MySqlCommand(insertSql, con, transaction);
-
-                insertCmd.Parameters.AddWithValue("@PistaId", pistaId);
-
-                insertCmd.Parameters.AddWithValue("@BazkideId", bazkideId);
-
-                insertCmd.Parameters.AddWithValue("@Data", data);
-
-                insertCmd.Parameters.AddWithValue("@Ordua", ordua);
-
-
-                insertCmd.ExecuteNonQuery();
-
-
-                transaction.Commit();
-
-                arrakasta = true;
-
-                Console.WriteLine("Erreserba egoki exekutatu da\n");
-
+                return SuccessList(pistak, 200, "Ezabatutako pista guztiak kargatu dira.");
             }
-
             catch (Exception ex)
-
             {
-
-                Console.WriteLine($"\nErrorea transakzioan: {ex.Message}");
-
-
-                if (saiakera == maxSaiakera)
-
-                {
-
-                    Console.WriteLine("Ezin izan da erreserba egin saiakera guztien ondoren.\n");
-
-                }
-
-                else
-                {
-
-                    Console.WriteLine("Berriro saiatzen...\n");
-
-                    Thread.Sleep(2000);
-
-                }
-
+                return Error(500, "INTERNAL_SERVER_ERROR", "Errorea ezabatutako pistak lortzean", ex.Message);
             }
-
         }
 
-    }
+        [HttpPut("berreskuratu/{id}")]
+        public async Task<IActionResult> PistaBerreskuratu(int id)
+        {
+            using var con = new MySqlConnection(_connectionString);
+            await con.OpenAsync();
 
+            using var transaction = await con.BeginTransactionAsync();
+
+            try
+            {
+                string checkSql = "SELECT izena FROM pista WHERE id = @Id AND ezabatuta = true FOR UPDATE";
+                using var checkCmd = new MySqlCommand(checkSql, con, transaction);
+                checkCmd.Parameters.AddWithValue("@Id", id);
+
+                var result = await checkCmd.ExecuteScalarAsync();
+
+                if (result == null)
+                {
+                    await transaction.RollbackAsync();
+                    return NotFoundError($"Ez da aurkitu {id} ID-a duen pistarik papeleran.");
+                }
+
+                string pistaIzena = result.ToString() ?? string.Empty;
+
+                string updateSql = "UPDATE pista SET ezabatuta = false WHERE id = @Id";
+                using var updateCmd = new MySqlCommand(updateSql, con, transaction);
+                updateCmd.Parameters.AddWithValue("@Id", id);
+
+                int rowsAffected = await updateCmd.ExecuteNonQueryAsync();
+
+                if (rowsAffected > 0)
+                {
+                    await transaction.CommitAsync();
+                    return Success(true, 200, $"'{pistaIzena}' pista berriro aktibatu da.");
+                }
+
+                await transaction.RollbackAsync();
+                return Error(400, "BAD_REQUEST", $"Ezin izan da '{pistaIzena}' pista berreskuratu.");
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return Error(500, "INTERNAL_SERVER_ERROR", "Errorea gertatu da pista berreskuratzean", ex.Message);
+            }
+        }
+
+        [HttpDelete("hardDelete/{id}")]
+        public async Task<IActionResult> DeleteHard(int id)
+        {
+            using var con = new MySqlConnection(_connectionString);
+            await con.OpenAsync();
+
+            using var transaction = await con.BeginTransactionAsync();
+
+            try
+            {
+                string checkSql = "SELECT izena FROM pista WHERE id = @Id AND ezabatuta = true FOR UPDATE";
+                using var checkCmd = new MySqlCommand(checkSql, con, transaction);
+                checkCmd.Parameters.AddWithValue("@Id", id);
+
+                var result = await checkCmd.ExecuteScalarAsync();
+
+                if (result == null)
+                {
+                    await transaction.RollbackAsync();
+                    return NotFoundError($"Ez da aurkitu {id} ID-a duen pistarik papeleran.");
+                }
+
+                string pistaIzena = result.ToString() ?? string.Empty;
+
+                string deleteSql = "DELETE FROM pista WHERE id = @Id";
+                using var deleteCmd = new MySqlCommand(deleteSql, con, transaction);
+                deleteCmd.Parameters.AddWithValue("@Id", id);
+
+                int rowsAffected = await deleteCmd.ExecuteNonQueryAsync();
+
+                if (rowsAffected > 0)
+                {
+                    await transaction.CommitAsync();
+                    return Success(true, 200, $"'{pistaIzena}' pista betiko ezabatu da.");
+                }
+
+                await transaction.RollbackAsync();
+                return Error(400, "BAD_REQUEST", $"Ezin izan da '{pistaIzena}' pista ezabatu.");
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return Error(500, "INTERNAL_SERVER_ERROR", "Errorea gertatu da pista ezabatzean", ex.Message);
+            }
+        }
+    }
 }
