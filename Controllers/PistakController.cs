@@ -124,6 +124,52 @@ namespace WebApi.Controllers
             }
         }
 
+        [HttpPut("softDelete/{id}")]
+        public async Task<IActionResult> SoftDelete(int id)
+        {
+            using var con = new MySqlConnection(_connectionString);
+            await con.OpenAsync();
+
+            using var transaction = await con.BeginTransactionAsync(); //Ez da guztiz beharrezkoa
+
+            try
+            {
+                string checkSql = "SELECT izena FROM pista WHERE id = @Id AND ezabatuta = false FOR UPDATE";
+                using var checkCmd = new MySqlCommand(checkSql, con, transaction);
+                checkCmd.Parameters.AddWithValue("@Id", id);
+
+                var result = await checkCmd.ExecuteScalarAsync();
+
+                if (result == null)
+                {
+                    await transaction.RollbackAsync();
+                    return NotFoundError($"Ez da aurkitu {id} ID-a duen pista aktiborik.");
+                }
+
+                string pistaIzena = result.ToString()!;
+
+                string updateSql = "UPDATE pista SET ezabatuta = true WHERE id = @Id";
+                using var updateCmd = new MySqlCommand(updateSql, con, transaction);
+                updateCmd.Parameters.AddWithValue("@Id", id);
+
+                int rowsAffected = await updateCmd.ExecuteNonQueryAsync();
+
+                if (rowsAffected > 0)
+                {
+                    await transaction.CommitAsync();
+                    return Success(true, 200, $"'{pistaIzena}' pista desaktibatu egin da.");
+                }
+
+                await transaction.RollbackAsync();
+                return Error(400, "BAD_REQUEST", $"Ezin izan da '{pistaIzena}' pista desaktibatu.");
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return Error(500, "INTERNAL_SERVER_ERROR", "Errorea gertatu da soft delete egitean", ex.Message);
+            }
+        }
+
         [HttpDelete("hardDelete/{id}")]
         public async Task<IActionResult> DeleteHard(int id)
         {
