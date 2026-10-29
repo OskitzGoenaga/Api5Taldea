@@ -1,5 +1,4 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using MySql.Data.MySqlClient;
 
 namespace WebApi.Controllers
 {
@@ -7,13 +6,6 @@ namespace WebApi.Controllers
     [ApiController]
     public class PistakController : ControllerBase
     {
-        private readonly string _connectionString;
-
-        public PistakController(string connectionString)
-        {
-            _connectionString = connectionString;
-        }
-
         // GET: api/<PistakController>
         [HttpGet]
         public IEnumerable<string> Get()
@@ -63,45 +55,111 @@ namespace WebApi.Controllers
             }
         }
 
-        [HttpDelete("/hardDelete/{id}")]
-        public bool DeleteHard(int id)
+        // PUT api/<PistakController>/5
+        [HttpPut("{id}")]
+        public void Put(int id, [FromBody] string value)
+        {
+        }
+
+        // SOFT DELETE api/<PistakController>/5
+        [HttpDelete("{id}")]
+        public void SoftDelete(int id)
         {
             try
             {
-                using var con = new MySqlConnection(_connectionString);
+
+                using var con = new MySqlConnection(ConnectionStrings);
+
                 con.Open();
 
-                string checkSql = "SELECT COUNT(1) FROM pista WHERE id = @id and ezabatuta = true";
-                using var checkCmd = new MySqlCommand(checkSql, con);
-                checkCmd.Parameters.AddWithValue("@Id", id);
-                
-                long count = Convert.ToInt64(checkCmd.ExecuteScalar());
 
-                if (count == 0)
+                using var transaction = con.BeginTransaction();
+
+
+                string selectSql = "SELECT id FROM pista WHERE id = @PistaId FOR UPDATE";
+
+                using var selectCmd = new MySqlCommand(selectSql, con, transaction);
+
+                selectCmd.Parameters.AddWithValue("@PistaId", pistaId);
+
+                using var reader = selectCmd.ExecuteReader();
+
+
+                if (reader.HasRows)
+
                 {
-                    Console.WriteLine($"Ez da aurkitu erreserbarik");
-                    return false;
+
+                    Console.WriteLine("\nPista hori jada erreserbatuta dago ordu eta data horretan");
+
+                    reader.Close();
+
+                    transaction.Rollback();
+
+                    return;
+
                 }
 
-                string deleteSql = "DELETE FROM pistak WHERE id = @Id";
-                using var deleteCmd = new MySqlCommand(deleteSql, con);
-                deleteCmd.Parameters.AddWithValue("@Id", id);
 
-                int rowsAffected = deleteCmd.ExecuteNonQuery();
+                reader.Close();
 
-                if (rowsAffected > 0)
-                {
-                    Console.WriteLine($"\nPista ondo ezabatu da");
-                    return true;
-                }
 
-                return false;
+                Console.WriteLine("Sakatu ENTER erreserba egiteko: ");
+
+                Console.ReadLine();
+
+
+                string insertSql = " erreserba (pista_id, bazkidea_id, data, ordua) VALUES (@PistaId, @BazkideId, @Data, @Ordua)";
+
+                using var insertCmd = new MySqlCommand(insertSql, con, transaction);
+
+                insertCmd.Parameters.AddWithValue("@PistaId", pistaId);
+
+                insertCmd.Parameters.AddWithValue("@BazkideId", bazkideId);
+
+                insertCmd.Parameters.AddWithValue("@Data", data);
+
+                insertCmd.Parameters.AddWithValue("@Ordua", ordua);
+
+
+                insertCmd.ExecuteNonQuery();
+
+
+                transaction.Commit();
+
+                arrakasta = true;
+
+                Console.WriteLine("Erreserba egoki exekutatu da\n");
+
             }
+
             catch (Exception ex)
+
             {
-                Console.WriteLine($"\nErrorea erreserba ezabatzean: {ex.Message}");
-                return false;
+
+                Console.WriteLine($"\nErrorea transakzioan: {ex.Message}");
+
+
+                if (saiakera == maxSaiakera)
+
+                {
+
+                    Console.WriteLine("Ezin izan da erreserba egin saiakera guztien ondoren.\n");
+
+                }
+
+                else
+                {
+
+                    Console.WriteLine("Berriro saiatzen...\n");
+
+                    Thread.Sleep(2000);
+
+                }
+
             }
+
         }
+
     }
+
 }
