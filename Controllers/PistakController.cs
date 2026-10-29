@@ -22,9 +22,45 @@ namespace WebApi.Controllers
         }
 
         // DELETE api/<PistakController>/5
-        [HttpDelete("{id}")]
-        public void Delete(int id)
+        [HttpDelete("/softDelete/{id}")]
+        public bool DeleteSoft(int id)
         {
+            try
+            {
+                using var con = new MySqlConnection(_connectionString);
+                con.Open();
+
+                string checkSql = "SELECT COUNT(1) FROM pista WHERE id = @Id";
+                using var checkCmd = new MySqlCommand(checkSql, con);
+                checkCmd.Parameters.AddWithValue("@Id", id);
+
+                long count = Convert.ToInt64(checkCmd.ExecuteScalar());
+
+                if (count == 0)
+                {
+                    Console.WriteLine($"Ez da aurkitu erreserbarik");
+                    return false;
+                }
+
+                string deleteSql = "UPDATE pista SET ezabatuta = true WHERE id = @Id";
+                using var deleteCmd = new MySqlCommand(deleteSql, con);
+                deleteCmd.Parameters.AddWithValue("@Id", id);
+
+                int rowsAffected = deleteCmd.ExecuteNonQuery();
+
+                if (rowsAffected > 0)
+                {
+                    Console.WriteLine($"\nPistaren egoera aldatu da");
+                    return true;
+                }
+
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"\nErrorea erreserba aldatzean: {ex.Message}");
+                return false;
+            }
         }
 
         [HttpDelete("/hardDelete/{id}")]
