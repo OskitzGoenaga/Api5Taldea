@@ -130,7 +130,7 @@ namespace WebApi.Controllers
             using var con = new MySqlConnection(_connectionString);
             await con.OpenAsync();
 
-            using var transaction = await con.BeginTransactionAsync(); //Ez da guztiz beharrezkoa
+            using var transaction = await con.BeginTransactionAsync(); 
 
             try
             {
