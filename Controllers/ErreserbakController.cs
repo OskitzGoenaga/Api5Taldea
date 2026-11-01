@@ -16,6 +16,40 @@ namespace WebApi.Controllers
             _connectionString = connectionString;
         }
 
+        // GET: api/Erreserbak
+        [HttpGet]
+        public async Task<IActionResult> GetErreserbak()
+        {
+            try
+            {
+                using var con = new MySqlConnection(_connectionString);
+                await con.OpenAsync();
+
+                string sql = "SELECT id, pista_id, bazkidea_id, DATE_FORMAT(data, '%Y-%m-%d') AS data, TIME_FORMAT(ordua, '%H:%i:%s') AS ordua FROM erreserba";
+                using var cmd = new MySqlCommand(sql, con);
+                using var reader = await cmd.ExecuteReaderAsync();
+
+                var erreserbak = new List<object>();
+                while (await reader.ReadAsync())
+                {
+                    erreserbak.Add(new
+                    {
+                        id = Convert.ToInt32(reader["id"]),
+                        pistaId = Convert.ToInt32(reader["pista_id"]),
+                        bazkideaId = Convert.ToInt32(reader["bazkidea_id"]),
+                        data = reader["data"].ToString(),
+                        ordua = reader["ordua"].ToString()
+                    });
+                }
+
+                return SuccessList(erreserbak, 200, "Erreserba guztiak kargatu dira.");
+            }
+            catch (Exception ex)
+            {
+                return Error(500, "INTERNAL_SERVER_ERROR", "Errorea erreserbak lortzean", ex.Message);
+            }
+        }
+
         // POST: api/Erreserbak
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] ErreserbaCreateDto dto)

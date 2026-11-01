@@ -130,10 +130,11 @@ namespace WebApi.Controllers
             using var con = new MySqlConnection(_connectionString);
             await con.OpenAsync();
 
-            using var transaction = await con.BeginTransactionAsync(); 
+            using var transaction = await con.BeginTransactionAsync();
 
             try
             {
+                // 1. Egiaztatu pista existitzen den eta aktibo dagoen
                 string checkSql = "SELECT izena FROM pista WHERE id = @Id AND ezabatuta = false FOR UPDATE";
                 using var checkCmd = new MySqlCommand(checkSql, con, transaction);
                 checkCmd.Parameters.AddWithValue("@Id", id);
@@ -148,20 +149,21 @@ namespace WebApi.Controllers
 
                 string pistaIzena = result.ToString()!;
 
-                string updateSql = "UPDATE pista SET ezabatuta = true WHERE id = @Id";
-                using var updateCmd = new MySqlCommand(updateSql, con, transaction);
-                updateCmd.Parameters.AddWithValue("@Id", id);
+                // 2. Desaktibatu pista (Soft Delete)
+                string updatePistaSql = "UPDATE pista SET ezabatuta = true WHERE id = @Id";
+                using var updatePistaCmd = new MySqlCommand(updatePistaSql, con, transaction);
+                updatePistaCmd.Parameters.AddWithValue("@Id", id);
+                await updatePistaCmd.ExecuteNonQueryAsync();
 
-                int rowsAffected = await updateCmd.ExecuteNonQueryAsync();
+                // 3. Pista horri lotutako erreserbak 'desgaituta = 1' gisa jarri
+                // (Oharra: Ziurtatu erreserba taulan 'desgaituta' zutabea duzula)
+                string updateErreserbaSql = "UPDATE erreserba SET desgaituta = 1 WHERE pista_id = @Id";
+                using var updateErreserbaCmd = new MySqlCommand(updateErreserbaSql, con, transaction);
+                updateErreserbaCmd.Parameters.AddWithValue("@Id", id);
+                await updateErreserbaCmd.ExecuteNonQueryAsync();
 
-                if (rowsAffected > 0)
-                {
-                    await transaction.CommitAsync();
-                    return Success(true, 200, $"'{pistaIzena}' pista desaktibatu egin da.");
-                }
-
-                await transaction.RollbackAsync();
-                return Error(400, "BAD_REQUEST", $"Ezin izan da '{pistaIzena}' pista desaktibatu.");
+                await transaction.CommitAsync();
+                return Success(true, 200, $"'{pistaIzena}' pista eta bere erreserbak desaktibatu egin dira.");
             }
             catch (Exception ex)
             {
