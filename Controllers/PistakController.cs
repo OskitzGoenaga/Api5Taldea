@@ -155,9 +155,9 @@ namespace WebApi.Controllers
                 updatePistaCmd.Parameters.AddWithValue("@Id", id);
                 await updatePistaCmd.ExecuteNonQueryAsync();
 
-                // 3. Pista horri lotutako erreserbak 'desgaituta = 1' gisa jarri
-                // (Oharra: Ziurtatu erreserba taulan 'desgaituta' zutabea duzula)
-                string updateErreserbaSql = "UPDATE erreserba SET desgaituta = 1 WHERE pista_id = @Id";
+                // 3. Pista horri lotutako erreserbak 'ezabatuta = 1' gisa jarri
+                // (Oharra: Ziurtatu erreserba taulan 'ezabatuta' zutabea duzula)
+                string updateErreserbaSql = "UPDATE erreserba SET ezabatuta = 1 WHERE pista_id = @Id";
                 using var updateErreserbaCmd = new MySqlCommand(updateErreserbaSql, con, transaction);
                 updateErreserbaCmd.Parameters.AddWithValue("@Id", id);
                 await updateErreserbaCmd.ExecuteNonQueryAsync();
